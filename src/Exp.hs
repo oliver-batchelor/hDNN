@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs, KindSignatures, TypeOperators, PatternGuards
            , ScopedTypeVariables, TypeFamilies, FlexibleInstances
-           , MultiParamTypeClasses, FlexibleContexts, DataKinds, RankNTypes
+           , MultiParamTypeClasses, FlexibleContexts
   #-}
 {-# OPTIONS_GHC -Wall -fno-warn-missing-methods -fno-warn-missing-signatures #-}
 
@@ -9,21 +9,18 @@
 
 module Exp where
 
+import Data.Kind (Type)
+
 import Control.Applicative (pure,(<$>),(<*>))
 import qualified Data.IntMap as I
 import Data.Maybe (fromMaybe) -- ,fromJust
 
 -- package ty
-import Data.Proof.EQ
+import Data.Type.Equality
 
 -- Import one of the following but not both
-import Data.Ty
-import Numeric.LinearAlgebra.Static (Domain, R, L)
-import qualified Numeric.LinearAlgebra.Static as S
-
-
-import GHC.TypeLits 
--- import CustomTy
+--import Data.Ty
+import Typed
 
 import Data.TReify (MuRef(..),ShowF(..),V(..),Graph(..),Bind(..),Id,reifyGraph)
 
@@ -31,35 +28,31 @@ import Data.TReify (MuRef(..),ShowF(..),V(..),Graph(..),Bind(..),Id,reifyGraph)
     Expressions
 --------------------------------------------------------------------}
 
-data Op :: * -> * -> * where
-  Add :: Num a  => Op s (a -> a -> a)
-  Mul :: Num a  => Op s (a -> a -> a)
-  Dot :: Op s (R n -> R n -> field)
-  
-  Lit :: Show a => a -> Op s a
+data Op :: Type -> Type where
+  Add :: Op (a -> a -> a)
+  Mul :: Op (a -> a -> a)
+  Lit :: Show a => a -> Op a
 
 instance ShowF Op where
   showF Add = "Add"
   showF Mul = "Mul"
-  showF Dot = "Dot"
-  
   showF (Lit a) = show a
 
-instance Show (Op s a) where show = showF
+instance Show (Op a) where show = showF
 
 -- Expressions, parameterized by variable type (constructor) and
 -- expression type.
-data E :: * -> (* -> *) -> * -> * where
-  Op   :: Op s a -> E s v a
-  (:^) :: (Typeable a, Typeable b) =>
-          E s v (a -> b) -> E s v a -> E s v b
-  Let  :: v a -> E s v a -> E s v b -> E s v b
-  Var  :: v a -> E s v a
+data E :: Type -> Type where
+  Op   :: Op a -> E a
+  (:$) :: (Typed a, Typed b) =>
+          E (a -> b) -> E a -> E b
+--  Let  :: v a -> E v a -> E v b -> E v b
+--  Var  :: v a -> E v a
 
-data N :: * -> (* -> *) -> * -> * where
-  ON  :: Op s a -> N s v a
-  App :: (Typeable a, Typeable b) =>
-         v (a -> b) -> v a -> N s v b
+data N :: (Type -> Type) -> Type -> Type where
+  ON  :: Op a -> N v a
+  App :: (Typed a, Typed b) =>
+         v (a -> b) -> v a -> N v b
 
 instance ShowF v => ShowF (N v) where
   showF (ON o)    = unwords ["ON" ,showF o]
@@ -71,26 +64,26 @@ instance ShowF v => ShowF (N v) where
 --   show (Let v a b) = unwords ["let",show v,"=",show a,"in",show b]
 --   show (Var v) = show v
 
-instance ShowF v => Show (E v a) where
+instance Show (E a) where
   show (Op o) = show o
-  show (u :^ v) = parens $ unwords [show u,show v]
-  show (Let v a b) = unwords ["let",showF v,"=",show a,"in",show b]
-  show (Var v) = showF v
+  show (u :$ v) = parens $ unwords [show u,show v]
+  -- show (Let v a b) = unwords ["let",showF v,"=",show a,"in",show b]
+  -- show (Var v) = showF v
 
 parens :: String -> String
 parens = ("(" ++) . (++ ")")
 
 -- TODO: showsPrec with infix and minimal parens
 
-instance MuRef Ty (E v) where
-  type DeRef (E v) = N
-  mapDeRef _ _ (Op o)   = pure $ ON o
-  mapDeRef k _ (f :^ a) = App <$> k ty f <*> k ty a
-  mapDeRef _ _ Let{}    = notSupp "Let"
-  mapDeRef _ _ Var{}    = notSupp "Var"
 
-notSupp :: String -> a
-notSupp meth = error $ "mapDeRef on E: "++meth++" not supported"
+instance MuRef Ty E where
+  type DeRef E = N
+
+  mapDeRef _ _ (Op o)   = pure $ ON  o
+  mapDeRef k _ (f :$ a) = App <$> k ty f <*> k ty a
+  -- mapDeRef _ _ Let{}    = notSupp "Let"
+  -- mapDeRef _ _ Var{}    = notSupp "Var"
+
 
 -- TODO: Consider splitting Let/Var off from E.  Then E wouldn't need the
 -- v parameter.
@@ -105,18 +98,18 @@ notSupp meth = error $ "mapDeRef on E: "++meth++" not supported"
 -- though).
 
 
-nodeE :: N v a -> E v a
-nodeE (ON o)    = Op o
-nodeE (App u v) = Var u :^ Var v
+-- nodeE :: N v a -> E v a
+-- nodeE (ON o)    = Op o
+-- nodeE (App u v) = Var u :^ Var v
 
-unGraph :: Graph Ty N a -> E (V Ty) a
-unGraph (Graph binds root) =
-  foldr (\ (Bind v n) -> Let v (nodeE n)) (Var root) (reverse binds)
+-- unGraph :: Typeable a => Graph Ty N a -> E (V Ty) a
+-- unGraph (Graph binds root) =
+--   foldr (\ (Bind v n) -> Let v (nodeE n)) (Var root) (reverse binds)
 
 
 -- Convert expressions to simple SSA forms
-ssa :: Typeable a => E (V Ty) a -> IO (E (V Ty) a)
-ssa = fmap unGraph . reifyGraph ty
+-- ssa :: Typeable a => E (V Ty) a -> IO (E (V Ty) a)
+-- ssa = fmap unGraph . reifyGraph ty
 
 
 
@@ -165,63 +158,29 @@ bindsF binds = \ (V i' a') -> extract a' (I.lookup i' m)
      | Just Refl <- a `tyEq` a' = n
      | otherwise                = error "bindsF: wrong type"
 
-unGraph2 :: Graph Ty N a -> E s (V Ty) a
-unGraph2 (Graph binds root) = foldr llet (var' root) (reverse binds)
- where
-   -- Wrap a let if non-trivial
-   llet :: Bind Ty N -> E (V Ty) b -> E (V Ty) b
-   llet bind | trivial bind = id
-   llet (Bind v n) = Let v (nodeE' n)
-   -- How many uses of variable
-   count :: Id -> Int
-   count = uses binds
-   -- Bindings as IntMap lookup
-   psf :: V Ty a -> N (V Ty) a
-   psf = bindsF binds
-   -- Too trivial to bother abstracting.
-   trivial :: Bind Ty N -> Bool
-   trivial (Bind _ (ON _))                = True
-   trivial (Bind (V i _) _) | count i < 2 = True
-   trivial _                              = False
-   -- Like nodeE but with inlining of trivial bindings
-   nodeE' :: N (V Ty) a -> E (V Ty) a
-   nodeE' (ON o)    = Op o
-   nodeE' (App a b) = var' a :^ var' b
-   -- Variable reference or inline
-   var' :: V Ty a -> E (V Ty) a
-   var' v | trivial (Bind v n) = nodeE' n
-          | otherwise          = Var v
-    where
-      n = psf v
 
 -- TODO: generalize unGraph2 from V.
 
--- | Common subexpression elimination
-cse :: Typeable a => E s (V Ty) a -> IO (E s (V Ty) a)
-cse = fmap unGraph2 . reifyGraph ty
 
 
 {--------------------------------------------------------------------
     Utilities for convenient expression building
 --------------------------------------------------------------------}
 
-op2 :: (Typeable a, Typeable b, Typeable c) =>
-       Op (a -> b -> c) -> E s v a -> E s v b -> E s v c
-op2 h a b = Op h :^ a :^ b
+op2 :: (Typed a, Typed b, Typed c) =>
+       Op (a -> b -> c) -> E a -> E b -> E c
+op2 h a b = Op h :$ a :$ b
 
-instance Eq (E s v a)
 
-instance (Typeable a, Show a, Num a) => Num (E s (V Ty) a) where
+
+instance (Typed a, Show a, Num a) => Num (E a) where
   fromInteger x = Op (Lit (fromInteger x))
   (+) = op2 Add
   (*) = op2 Mul
-  
 
-type Expr a = forall s. E s (V Ty) a
+plus :: Typed a => E a -> E a -> E a
+plus = op2 Add
 
-dot :: KnownNat n => Expr (R n) -> Expr (R n) -> Expr Double
-dot = op2 Dot
-  
 
 sqr :: Num a => a -> a
 sqr x = x * x
@@ -231,33 +190,14 @@ sqr x = x * x
 --------------------------------------------------------------------}
 
 -- type-specialize
-reify :: (MuRef Ty h, Typeable a) => h a -> IO (Graph Ty (DeRef h) a)
+reify :: (MuRef Ty h, Typed a) => h a -> IO (Graph Ty (DeRef h) a)
 reify = reifyGraph ty
 
 -- test expressions
-e1 = 3 + 5 :: E (V Ty) Integer
-e2 = e1 * e1
-e3 = 3 + 3 :: E (V Ty) Integer
+e1 = plus 3 5 :: E Integer
+e2 = e1 * e1 * e1
+e3 = 3 + 3 :: E Integer
 
-
-
-
-
-
-
-lit :: (Show a) => a -> E (V Ty) a
-lit = Op . Lit
-
-v1 :: Expr (R 3)
-v1 = lit $ S.fromList [1,2,3]
-
-
-v2 :: Expr (R 3)
-v2 = lit $ S.fromList [3,2,1]
-
-
-v3 = (v1 `dot` v2)
-v4 = v3 + v3
 
 {-
   > e1
@@ -289,7 +229,7 @@ v4 = v3 + v3
   ((Add 3) 3)
 -}
 
-test :: Int -> E (V Ty) Integer
+test :: Int -> E Integer
 test n = iterate sqr e1 !! n
 
 {-
