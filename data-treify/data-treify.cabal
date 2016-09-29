@@ -43,4 +43,5 @@ Library
   Exposed-modules:
        Data.TReify
        Data.Reify.TGraph
+       Data.IsTy
   Ghc-Options:  -Wall
