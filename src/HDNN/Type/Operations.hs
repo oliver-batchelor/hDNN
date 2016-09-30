@@ -25,22 +25,15 @@ $(singletons [d|
   |])
 
 
-
-class CanConcat (i :: Nat) (ds :: [Nat]) (ds' :: [Nat]) where
-  type ConcatDim i ds ds' :: [Nat]
-  type ConcatDim i ds ds' = TypeError (Text "foo")
-
-
-instance  CanConcat i ds ds' where
-  type ConcatDim i ds ds' = FromJust (MaybeConcat i ds ds')
-
+type family ConcatDim (i :: Nat) (ds :: [Nat]) (ds' :: [Nat]) where
+  ConcatDim i ds ds' = FromMaybe (TypeError (ShowType ds')) (MaybeConcat i ds ds')
 
 data T ds = T
 
-foo :: (CanConcat 1 ds ds') => T ds -> T ds' -> T (ConcatDim 1 ds ds')
+foo :: T ds -> T ds' -> T (ConcatDim 5 ds ds')
 foo = undefined
 
-x :: T [1,2,3]
+x :: T [2,2,3]
 x = T
 
 y :: T [2,2,3]
