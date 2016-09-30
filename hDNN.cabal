@@ -17,15 +17,21 @@ cabal-version:       >=1.10
 
 library
   exposed-modules: HDNN.Exp
-  -- other-modules:
-  ghc-options: -fno-warn-redundant-constraints
-  other-extensions: PolyKinds
-  default-extensions: FlexibleContexts, FlexibleInstances, GADTs, DataKinds, TypeInType, KindSignatures, InstanceSigs, TypeOperators, ConstraintKinds, RankNTypes, ScopedTypeVariables
+  other-modules: HDNN.Type.Operations
+  ghc-options: -fplugin GHC.TypeLits.Normalise
+  other-extensions: PolyKinds, TemplateHaskell
+  default-extensions:  FlexibleContexts, FlexibleInstances, GADTs, DataKinds,
+                       TypeInType, KindSignatures, InstanceSigs, TypeOperators,
+                       ConstraintKinds, RankNTypes, ScopedTypeVariables, TypeFamilies,
+                       UndecidableInstances, MultiParamTypeClasses
+
   build-depends:       base >=4.9 && <4.10,
                       data-treify,
                       containers,
                       typelits-witnesses,
-                      vector
+                      vector,
+                      singletons,
+                      ghc-typelits-natnormalise
 
   hs-source-dirs:      src
   default-language:    Haskell2010
