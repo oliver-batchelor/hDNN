@@ -1,1 +1,3 @@
-{ suppressErrors: true }
+{ 
+  "suppressErrors": true 
+}
