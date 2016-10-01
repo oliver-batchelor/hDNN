@@ -21,8 +21,7 @@ import Control.Applicative (liftA2)
 import Data.Type.Equality
 import Data.IsTy
 
-import GHC.TypeLits
-import GHC.TypeLits.List
+import HDNN.Prelude
 import HDNN.Tensor
 
 data PrimTy a where

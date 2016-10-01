@@ -1,3 +1,5 @@
+{-# LANGUAGE PartialTypeSignatures, NoMonomorphismRestriction #-}
+
 module HDNN.Tensor where
 
 --import GHC.TypeLits
@@ -5,6 +7,14 @@ import Data.Kind (Type)
 
 import GHC.TypeLits
 import GHC.TypeLits.List
+
+import Data.Singletons.Prelude
+
+import Data.Proxy
+
+import HDNN.Type.Shape
+import HDNN.Prelude
+
 
 import qualified Data.Vector.Unboxed as V
 
@@ -24,13 +34,51 @@ instance (Show a, Num a, KnownNats ds) => Num (Tensor ds a) where
     (*) t1 t2 = Tensor
     abs t = Tensor
     signum t = Tensor
+--
+-- concat :: SNat dim -> Tensor ds a -> Tensor ds' a -> Tensor (ConcatShape dim ds ds') a
+-- concat _ Tensor Tensor = Tensor
 
+dim0 = SZ
+dim1 = SS dim0
+dim2 = SS dim1
+dim3 = SS dim2
+dim4 = SS dim3
 
-concat1 :: (ds ~ ds') => Tensor (d1 ': ds) a -> Tensor (d1' : ds') a -> Tensor (d1 + d1' : ds) a
+type D0 = Z
+type D1 = S D0
+type D2 = S D1
+type D3 = S D2
+type D4 = S D3
+
+type Dim (d :: N) = Sing d
+
+concat ::  Dim d -> Tensor xs a -> Tensor ys a -> Tensor (ConcatShape d xs ys) a
+concat _ Tensor Tensor = Tensor
+
+concatMat :: (dim :< D2) ~ 'True => Dim dim -> Matrix m n a -> Matrix p q a -> Tensor (ConcatShape dim [m, n] [p, q]) a
+concatMat = concat
+
+concatVec ::  Vector n a -> Vector m a -> Vector (n + m) a
+concatVec = concat dim0
+
+baz :: _
+baz m1 m2 = concat dim1 m1 m2
+
+baz2 :: Matrix m m Float -> _ -> _
+baz2 m1 m2 = concatMat dim1 m1 m2
+
+baz3 :: Matrix 4 4 Float -> _
+baz3 m1 m2 = concatMat dim0 (baz2 m1 m2) x where
+  (x::_) = baz2 m1 m1
+
+-- baz4 :: Matrix 4 6 Float -> Matrix 4 4 Float -> Matrix _ _ Float
+-- baz4 m1 m2 = baz3 m1 m2
+
+concat0 :: (ds ~ ds') => Tensor (d0 ': ds) a -> Tensor (d0' : ds') a -> Tensor (d0 + d0' : ds) a
+concat0 Tensor Tensor = Tensor
+
+concat1 :: (d0 ~ d0', ds ~ ds') => Tensor (d0 : d1 : ds) a -> Tensor (d0' : d1' : ds') a -> Tensor (d0 : d1 + d1' : ds) a
 concat1 Tensor Tensor = Tensor
 
-concat2 :: (d1 ~ d1', ds ~ ds') => Tensor (d1 : d2 : ds) a -> Tensor (d1' : d2' : ds') a -> Tensor (d1 : d2 + d2' : ds) a
+concat2 :: (d0 ~ d0', d1 ~ d1', ds ~ ds') => Tensor (d0 : d1 : d2 : ds) a -> Tensor (d0' : d1' : d2' : ds') a -> Tensor (d0 : d1 : d2 + d2' : ds) a
 concat2 Tensor Tensor = Tensor
-
-concat3 :: (d1 ~ d1', d2 ~ d2', ds ~ ds') => Tensor (d1 : d2 : d3 : ds) a -> Tensor (d1' : d2' : d3' : ds') a -> Tensor (d1 : d2 : d3 + d3' : ds) a
-concat3 Tensor Tensor = Tensor

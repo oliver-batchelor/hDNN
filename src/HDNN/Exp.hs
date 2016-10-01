@@ -1,15 +1,11 @@
-{-# LANGUAGE GADTs, KindSignatures, TypeOperators, PatternGuards
-           , ScopedTypeVariables, TypeFamilies, FlexibleInstances
-           , MultiParamTypeClasses, FlexibleContexts, TypeApplications
-  #-}
-{-# OPTIONS_GHC -Wall -fno-warn-missing-methods -fno-warn-missing-signatures -fprint-potential-instances #-}
+{-# OPTIONS_GHC -fplugin GHC.TypeLits.Normalise -fplugin GHC.TypeLits.KnownNat.Solver #-}
+
 
 -- Example of data-treify for a first pass of CSE on a simple typed
 -- language representation.
 
 module HDNN.Exp where
 
-import Data.Kind (Type)
 
 import Control.Applicative (pure,(<$>),(<*>))
 import qualified Data.IntMap as I
@@ -23,8 +19,8 @@ import Data.Type.Equality
 import HDNN.Typed
 import HDNN.Tensor
 
---import GHC.TypeLits
-import GHC.TypeLits.List
+import HDNN.Type.Shape
+import HDNN.Prelude
 
 import Data.TReify (MuRef(..),ShowF(..),V(..),Graph(..),Bind(..),Id,reifyGraph)
 
@@ -35,11 +31,15 @@ import Data.TReify (MuRef(..),ShowF(..),V(..),Graph(..),Bind(..),Id,reifyGraph)
 data Op :: Type -> Type where
   Add :: (IsPrim a, Num a) => Op (Tensor ds a -> Tensor ds a -> Tensor ds a)
   Mul :: (IsPrim a, Num a) => Op (Tensor ds a -> Tensor ds a -> Tensor ds a)
+  Cat0 :: (IsPrim a) => Op (Tensor (d0 ': ds) a -> Tensor (d0' : ds') a -> Tensor (d0 + d0' : ds) a)
+
+  Cat :: SNat d -> Op (Tensor ds a -> Tensor ds' a -> Tensor (ConcatShape d ds ds') a)
   Lit :: (Show a, KnownNats ds) => Tensor ds a -> Op (Tensor ds a)
 
 instance ShowF Op where
   showF Add = "Add"
   showF Mul = "Mul"
+  showF (Cat _) = "Cat"
   showF (Lit a) = show a
 
 instance Show (Op a) where show = showF
@@ -176,11 +176,28 @@ op2 :: (Typed a, Typed b, Typed c) =>
 op2 h a b = Op h :$ a :$ b
 
 
+op1 :: (Typed a, Typed b) =>
+       Op (a -> b) -> E a -> E b
+op1 h a = Op h :$ a
+
 
 instance (Show a, Num a, IsPrim a, KnownNats ds) => Num (E (Tensor ds a)) where
   fromInteger = Op . Lit . fromInteger
   (+) = op2 Add
   (*) = op2 Mul
+  (-) = undefined
+  abs = undefined
+  signum = undefined
+  negate = undefined
+
+
+cat :: (IsPrim a, KnownNats (ConcatShape d ds ds'), KnownNats ds, KnownNats ds')
+  => SNat d -> E (Tensor ds a) -> E (Tensor ds' a) -> E (Tensor (ConcatShape d ds ds') a)
+cat d = op2 (Cat d)
+
+cat0 :: (IsPrim a, KnownNat d0, KnownNat d0', KnownNats ds, ds ~ ds')
+  => E (Tensor (d0 : ds) a) -> E (Tensor (d0' : ds') a) -> E (Tensor (d0 + d0' : ds) a)
+cat0 = op2 Cat0
 
 
 sqr :: Num a => a -> a
@@ -195,73 +212,15 @@ reify :: (MuRef Ty h, Typed a) => h a -> IO (Graph Ty (DeRef h) a)
 reify = reifyGraph ty
 
 -- test expressions
-e1 = 3 + 5 :: E (Vector 1 Int)
+e1 = 3 + 5 :: E (Vector 1 Float)
 e2 = e1 * e1 * e1
-e3 = 3 + 3 :: E (Vector 1 Int)
+e3 = 3 + 3 :: E (Vector 1 Float)
+
+e4 = cat (snat @ 0) e1 e2
+
+mat = 3 + 5 :: E (Matrix 3 3 Float)
+--e5 = cat (Proxy :: Proxy 0) mat e4
 
 
-{-
-  > e1
-  ((Add 3) 5)
-  > reify e1
-  let [x0 = App x1 x4,x4 = ON 5,x1 = App x2 x3,x3 = ON 3,x2 = ON Add] in x0
-  > ssa e1
-  let x2 = Add in let x3 = 3 in let x1 = (x2 x3) in let x4 = 5 in let x0 = (x1 x4) in x0
-  > cse e1
-  ((Add 3) 5)
-
-  > e2
-  ((Mul ((Add 3) 5)) ((Add 3) 5))
-  > reify e2
-  let [x0 = App x1 x3,x1 = App x2 x3,x3 = App x4 x7,x7 = ON 5,x4 = App x5 x6,x6 = ON 3,x5 = ON Add,x2 = ON Mul] in x0
-  > ssa e2
-  let x2 = Mul in let x5 = Add in let x6 = 3 in let x4 = (x5 x6) in let x7 = 5 in let x3 = (x4 x7) in let x1 = (x2 x3) in let x0 = (x1 x3) in x0
-  > cse e2
-  let x3 = ((Add 3) 5) in ((Mul x3) x3)
-
-  > e3
-  ((Add 3) 3)
-  > reify e3
-  let [x0 = App x1 x3,x1 = App x2 x3,x3 = ON 3,x2 = ON Add] in x0
-  >
-  > ssa e3
-  let x2 = Add in let x3 = 3 in let x1 = (x2 x3) in let x0 = (x1 x3) in x0
-  > cse e3
-  ((Add 3) 3)
--}
-
-test :: Int -> E (Vector 1 Int)
-test n = iterate sqr e1 !! n
-
-{-
-  > test 2
-  ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))
-  > reify (test 2)
-  let [x0 = App x1 x3,x1 = App x2 x3,x3 = App x4 x6,x4 = App x5 x6,x6 = App x7 x10,x10 = ON 5,x7 = App x8 x9,x9 = ON 3,x8 = ON Add,x5 = ON Mul,x2 = ON Mul] in x0
-  > ssa (test 2)
-  let x2 = Mul in let x5 = Mul in let x8 = Add in let x9 = 3 in let x7 = (x8 x9) in let x10 = 5 in let x6 = (x7 x10) in let x4 = (x5 x6) in let x3 = (x4 x6) in let x1 = (x2 x3) in let x0 = (x1 x3) in x0
-  > cse (test 2)
-  let x6 = ((Add 3) 5) in let x3 = ((Mul x6) x6) in ((Mul x3) x3)
-
-  > test 5
-  ((Mul ((Mul ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5))))) ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))))) ((Mul ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5))))) ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5))))))
-  > reify (test 5)
-  let [x0 = App x1 x3,x1 = App x2 x3,x3 = App x4 x6,x4 = App x5 x6,x6 = App x7 x9,x7 = App x8 x9,x9 = App x10 x12,x10 = App x11 x12,x12 = App x13 x15,x13 = App x14 x15,x15 = App x16 x19,x19 = ON 5,x16 = App x17 x18,x18 = ON 3,x17 = ON Add,x14 = ON Mul,x11 = ON Mul,x8 = ON Mul,x5 = ON Mul,x2 = ON Mul] in x0
-  > ssa (test 5)
-  let x2 = Mul in let x5 = Mul in let x8 = Mul in let x11 = Mul in let x14 = Mul in let x17 = Add in let x18 = 3 in let x16 = (x17 x18) in let x19 = 5 in let x15 = (x16 x19) in let x13 = (x14 x15) in let x12 = (x13 x15) in let x10 = (x11 x12) in let x9 = (x10 x12) in let x7 = (x8 x9) in let x6 = (x7 x9) in let x4 = (x5 x6) in let x3 = (x4 x6) in let x1 = (x2 x3) in let x0 = (x1 x3) in x0
-  > cse (test 5)
-  let x15 = ((Add 3) 5) in let x12 = ((Mul x15) x15) in let x9 = ((Mul x12) x12) in let x6 = ((Mul x9) x9) in let x3 = ((Mul x6) x6) in ((Mul x3) x3)
--}
-
-e4 = e1 ^ (29 :: Integer)
-
-{-
-  > e4
-  ((Mul ((Mul ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5))))) ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))))) ((Mul ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5))))) ((Mul ((Mul ((Mul ((Add 3) 5)) ((Add 3) 5))) ((Mul ((Add 3) 5)) ((Add 3) 5)))) ((Add 3) 5))))
-  > reify e4
-  let [x0 = App x1 x20,x20 = App x21 x23,x23 = App x24 x15,x24 = App x25 x9,x25 = ON Mul,x21 = App x22 x6,x22 = ON Mul,x1 = App x2 x3,x3 = App x4 x6,x4 = App x5 x6,x6 = App x7 x9,x7 = App x8 x9,x9 = App x10 x12,x10 = App x11 x12,x12 = App x13 x15,x13 = App x14 x15,x15 = App x16 x19,x19 = ON 5,x16 = App x17 x18,x18 = ON 3,x17 = ON Add,x14 = ON Mul,x11 = ON Mul,x8 = ON Mul,x5 = ON Mul,x2 = ON Mul] in x0
-  > ssa e4
-  let x2 = Mul in let x5 = Mul in let x8 = Mul in let x11 = Mul in let x14 = Mul in let x17 = Add in let x18 = 3 in let x16 = (x17 x18) in let x19 = 5 in let x15 = (x16 x19) in let x13 = (x14 x15) in let x12 = (x13 x15) in let x10 = (x11 x12) in let x9 = (x10 x12) in let x7 = (x8 x9) in let x6 = (x7 x9) in let x4 = (x5 x6) in let x3 = (x4 x6) in let x1 = (x2 x3) in let x22 = Mul in let x21 = (x22 x6) in let x25 = Mul in let x24 = (x25 x9) in let x23 = (x24 x15) in let x20 = (x21 x23) in let x0 = (x1 x20) in x0
-  > cse e4
-  let x15 = ((Add 3) 5) in let x12 = ((Mul x15) x15) in let x9 = ((Mul x12) x12) in let x6 = ((Mul x9) x9) in ((Mul ((Mul x6) x6)) ((Mul x6) ((Mul x9) x15)))
--}
+--
+-

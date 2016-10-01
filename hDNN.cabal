@@ -16,14 +16,14 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules: HDNN.Exp
-  other-modules: HDNN.Type.Operations
-  ghc-options: -fplugin GHC.TypeLits.Normalise
+  exposed-modules: HDNN.Exp, HDNN.Tensor, HDNN.Type.Shape, HDNN.Typed
+  other-modules: HDNN.Prelude
   other-extensions: PolyKinds, TemplateHaskell
   default-extensions:  FlexibleContexts, FlexibleInstances, GADTs, DataKinds,
                        TypeInType, KindSignatures, InstanceSigs, TypeOperators,
                        ConstraintKinds, RankNTypes, ScopedTypeVariables, TypeFamilies,
-                       UndecidableInstances, MultiParamTypeClasses
+                       UndecidableInstances, MultiParamTypeClasses, TypeApplications,
+                       NoImplicitPrelude, NoMonomorphismRestriction
 
   build-depends:       base >=4.9 && <4.10,
                       data-treify,
@@ -31,7 +31,8 @@ library
                       typelits-witnesses,
                       vector,
                       singletons,
-                      ghc-typelits-natnormalise
+                      ghc-typelits-natnormalise,
+                      ghc-typelits-knownnat
 
   hs-source-dirs:      src
   default-language:    Haskell2010
