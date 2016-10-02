@@ -50,12 +50,12 @@ type D2 = S D1
 type D3 = S D2
 type D4 = S D3
 
-type Dim (d :: N) = Sing d
+type D (d :: N) = Sing d
 
-concat ::  Dim d -> Tensor xs a -> Tensor ys a -> Tensor (ConcatShape d xs ys) a
+concat ::  D d -> Tensor xs a -> Tensor ys a -> Tensor (ConcatShape d xs ys) a
 concat _ Tensor Tensor = Tensor
 
-concatMat :: (dim :< D2) ~ 'True => Dim dim -> Matrix m n a -> Matrix p q a -> Tensor (ConcatShape dim [m, n] [p, q]) a
+concatMat ::  D dim -> Matrix m n a -> Matrix p q a -> Tensor (ConcatShape d [m, n] [p, q]) a
 concatMat = concat
 
 concatVec ::  Vector n a -> Vector m a -> Vector (n + m) a
@@ -64,12 +64,12 @@ concatVec = concat dim0
 baz :: _
 baz m1 m2 = concat dim1 m1 m2
 
-baz2 :: Matrix m m Float -> _ -> _
-baz2 m1 m2 = concatMat dim1 m1 m2
+-- baz2 :: Matrix m m Float -> _ -> _
+-- baz2 m1 m2 = concatMat dim2 m1 m2
 
 baz3 :: Matrix 4 4 Float -> _
-baz3 m1 m2 = concatMat dim0 (baz2 m1 m2) x where
-  (x::_) = baz2 m1 m1
+baz3 m1 m2 = concatMat dim0 m2 x where
+  (x::_) = baz m1 m1
 
 -- baz4 :: Matrix 4 6 Float -> Matrix 4 4 Float -> Matrix _ _ Float
 -- baz4 m1 m2 = baz3 m1 m2

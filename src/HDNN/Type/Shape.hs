@@ -17,6 +17,13 @@ $(singletons [d|
 class Concats (d:: N) (xs::[Nat]) (ys::[Nat]) where
   type ConcatShape d xs ys :: [Nat]
 
+instance Concats Z '[] ys where
+  type ConcatShape Z '[] _ = TypeError (Text "concat index out of range")
+
+instance Concats Z xs '[] where
+  type ConcatShape Z _ '[] = TypeError (Text "concat index out of range")
+
+
 instance (xs ~ ys) => Concats Z (x:xs) (y:ys) where
   type ConcatShape Z (x:xs) (y:_) = (x + y : xs)
 
