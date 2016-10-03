@@ -7,7 +7,8 @@ import  GHC.TypeLits.List as Export
 import  Data.Proxy as Export
 import  Data.Kind  as Export (Type)
 
-import Prelude as Export hiding (concat)
+
+import Prelude as Export hiding (concat, id, (.))
 
 data SNat (n :: Nat) = KnownNat n => SNat (Proxy n)
 

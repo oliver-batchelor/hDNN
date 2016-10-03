@@ -12,7 +12,7 @@
 -- Custom Ty & Typable
 ----------------------------------------------------------------------
 
-module HDNN.Typed (Ty(..), PrimTy(..), IsPrim(..), Typed,ty, module Data.IsTy) where
+module HDNN.Typed (Ty(..), PrimTy(..), Prim(..), Typed, ty) where
 
 import Control.Applicative (liftA2)
 
@@ -33,36 +33,34 @@ data PrimTy a where
 data Ty a where
   T :: NatList dims -> PrimTy a -> Ty (Tensor dims a)
   Pair   :: Ty a -> Ty b -> Ty (a, b)
-  (:->)  :: Ty a -> Ty b -> Ty (a -> b)
 
 liftEq2 :: (a :~: a') -> (b :~: b') -> (f a b :~: f a' b')
 liftEq2 Refl Refl = Refl
 
-instance IsTy PrimTy where
-  Bool     `tyEq` Bool       = Just Refl
-  Int      `tyEq` Int        = Just Refl
-  Float    `tyEq` Float      = Just Refl
+instance TestEquality PrimTy where
+  Bool     `testEquality` Bool       = Just Refl
+  Int      `testEquality` Int        = Just Refl
+  Float    `testEquality` Float      = Just Refl
 
 
-instance IsTy Ty where
-  Pair a b `tyEq` (Pair a' b')  = liftEq2 <$> tyEq a a' <*> tyEq b b'
-  (a :-> b)  `tyEq` (a' :-> b') = liftEq2 <$> tyEq a a' <*> tyEq b b'
-  (T ns a)    `tyEq` (T ns' a') = liftEq2 <$> sameNats ns ns' <*> tyEq a a'
+instance TestEquality Ty where
+  Pair a b `testEquality` (Pair a' b')  = liftEq2 <$> testEquality a a' <*> testEquality b b'
+  (T ns a)    `testEquality` (T ns' a') = liftEq2 <$> sameNats ns ns' <*> testEquality a a'
 
-  tyEq _     _               = Nothing
+  _ `testEquality`    _               = Nothing
 
 --
-class IsPrim a where primTy :: PrimTy a
+class Prim a where primTy :: PrimTy a
 
-instance IsPrim Bool                               where primTy = Bool
-instance IsPrim Int                                where primTy = Int
-instance IsPrim Float                              where primTy = Float
+instance Prim Bool                               where primTy = Bool
+instance Prim Int                                where primTy = Int
+instance Prim Float                              where primTy = Float
 
 -- | Replacement for Typeable and the ty package's ty.
 class Typed a where ty :: Ty a
 
-instance (IsPrim a, KnownNats dims) => Typed (Tensor dims a) where
+instance (Prim a, KnownNats dims) => Typed (Tensor dims a) where
   ty = T natsList primTy
 
-instance (Typed a, Typed b) => Typed (a,b)  where ty = Pair ty ty
-instance (Typed a, Typed b) => Typed (a->b) where ty = ty :-> ty
+instance (Typed a, Typed b) => Typed (a,b)  where
+  ty = Pair ty ty

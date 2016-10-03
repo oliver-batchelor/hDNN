@@ -38,38 +38,31 @@ instance (Show a, Num a, KnownNats ds) => Num (Tensor ds a) where
 -- concat :: SNat dim -> Tensor ds a -> Tensor ds' a -> Tensor (ConcatShape dim ds ds') a
 -- concat _ Tensor Tensor = Tensor
 
-dim0 = SZ
-dim1 = SS dim0
-dim2 = SS dim1
-dim3 = SS dim2
-dim4 = SS dim3
+dim0 = snat @ 0
+dim1 = snat @ 1
+dim3 = snat @ 3
+dim4 = snat @ 4
+dim5 = snat @ 5
 
-type D0 = Z
-type D1 = S D0
-type D2 = S D1
-type D3 = S D2
-type D4 = S D3
 
-type D (d :: N) = Sing d
-
-concat ::  D d -> Tensor xs a -> Tensor ys a -> Tensor (ConcatShape d xs ys) a
+concat ::  SNat dim -> Tensor xs a -> Tensor ys a -> Tensor (Concats dim xs ys) a
 concat _ Tensor Tensor = Tensor
 
-concatMat ::  D dim -> Matrix m n a -> Matrix p q a -> Tensor (ConcatShape d [m, n] [p, q]) a
+concatMat ::  SNat dim -> Matrix m n a -> Matrix p q a -> Tensor (Concats dim [m, n] [p, q]) a
 concatMat = concat
 
 concatVec ::  Vector n a -> Vector m a -> Vector (n + m) a
-concatVec = concat dim0
+concatVec = concat (snat @ 0)
 
-baz :: _
-baz m1 m2 = concat dim1 m1 m2
-
--- baz2 :: Matrix m m Float -> _ -> _
--- baz2 m1 m2 = concatMat dim2 m1 m2
-
-baz3 :: Matrix 4 4 Float -> _
-baz3 m1 m2 = concatMat dim0 m2 x where
-  (x::_) = baz m1 m1
+-- baz :: _
+-- baz m1 m2 = concat dim1 m1 m2
+--
+-- -- baz2 :: Matrix m m Float -> _ -> _
+-- -- baz2 m1 m2 = concatMat dim2 m1 m2
+--
+-- baz3 :: Matrix 4 4 Float -> _
+-- baz3 m1 m2 = concatMat dim0 m2 x where
+--   (x::_) = baz m1 m1
 
 -- baz4 :: Matrix 4 6 Float -> Matrix 4 4 Float -> Matrix _ _ Float
 -- baz4 m1 m2 = baz3 m1 m2

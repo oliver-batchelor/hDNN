@@ -31,6 +31,7 @@ library
                       typelits-witnesses,
                       vector,
                       singletons,
+                      type-combinators,
                       ghc-typelits-natnormalise,
                       ghc-typelits-knownnat
 
