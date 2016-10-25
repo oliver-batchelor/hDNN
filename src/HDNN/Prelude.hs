@@ -8,9 +8,11 @@ import  Data.Proxy as Export
 import  Data.Kind  as Export (Type)
 
 
-import Prelude as Export hiding (concat, id, (.))
+import Prelude as Export hiding (concat, id, (.), Real)
 
-data SNat (n :: Nat) = KnownNat n => SNat (Proxy n)
+data SNat (n :: Nat) where
+  SZero :: SNat 0
+  SNat  :: KnownNat n => Proxy n -> SNat n
 
 instance Show (SNat n) where
   show (SNat p) = 'd' : show (natVal p)

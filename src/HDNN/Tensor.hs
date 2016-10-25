@@ -38,11 +38,7 @@ instance (Show a, Num a, KnownNats ds) => Num (Tensor ds a) where
 -- concat :: SNat dim -> Tensor ds a -> Tensor ds' a -> Tensor (ConcatShape dim ds ds') a
 -- concat _ Tensor Tensor = Tensor
 
-dim0 = snat @ 0
-dim1 = snat @ 1
-dim3 = snat @ 3
-dim4 = snat @ 4
-dim5 = snat @ 5
+
 
 
 concat ::  SNat dim -> Tensor xs a -> Tensor ys a -> Tensor (Concats dim xs ys) a
@@ -67,11 +63,11 @@ concatVec = concat (snat @ 0)
 -- baz4 :: Matrix 4 6 Float -> Matrix 4 4 Float -> Matrix _ _ Float
 -- baz4 m1 m2 = baz3 m1 m2
 
-concat0 :: (ds ~ ds') => Tensor (d0 ': ds) a -> Tensor (d0' : ds') a -> Tensor (d0 + d0' : ds) a
-concat0 Tensor Tensor = Tensor
-
-concat1 :: (d0 ~ d0', ds ~ ds') => Tensor (d0 : d1 : ds) a -> Tensor (d0' : d1' : ds') a -> Tensor (d0 : d1 + d1' : ds) a
-concat1 Tensor Tensor = Tensor
-
-concat2 :: (d0 ~ d0', d1 ~ d1', ds ~ ds') => Tensor (d0 : d1 : d2 : ds) a -> Tensor (d0' : d1' : d2' : ds') a -> Tensor (d0 : d1 : d2 + d2' : ds) a
-concat2 Tensor Tensor = Tensor
+-- concat0 :: (ds ~ ds') => Tensor (d0 ': ds) a -> Tensor (d0' : ds') a -> Tensor (d0 + d0' : ds) a
+-- concat0 Tensor Tensor = Tensor
+--
+-- concat1 :: (d0 ~ d0', ds ~ ds') => Tensor (d0 : d1 : ds) a -> Tensor (d0' : d1' : ds') a -> Tensor (d0 : d1 + d1' : ds) a
+-- concat1 Tensor Tensor = Tensor
+--
+-- concat2 :: (d0 ~ d0', d1 ~ d1', ds ~ ds') => Tensor (d0 : d1 : d2 : ds) a -> Tensor (d0' : d1' : d2' : ds') a -> Tensor (d0 : d1 : d2 + d2' : ds) a
+-- concat2 Tensor Tensor = Tensor

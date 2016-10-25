@@ -6,7 +6,7 @@ import Data.Singletons.Prelude
 
 import HDNN.Prelude
 
-import Type.Family.Nat as Export (N(..)) 
+import Type.Family.Nat as Export (N(..))
 
 dim0 = snat @ 0
 dim1 = snat @ 1

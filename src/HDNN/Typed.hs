@@ -19,7 +19,6 @@ import Control.Applicative (liftA2)
 -- ty package
 
 import Data.Type.Equality
-import Data.IsTy
 
 import HDNN.Prelude
 import HDNN.Tensor
@@ -32,6 +31,7 @@ data PrimTy a where
 -- | Typed type representation.  Alternative to Data.Ty in the ty package
 data Ty a where
   T :: NatList dims -> PrimTy a -> Ty (Tensor dims a)
+  Func   :: Ty a -> Ty b -> Ty (a -> b)
   Pair   :: Ty a -> Ty b -> Ty (a, b)
 
 liftEq2 :: (a :~: a') -> (b :~: b') -> (f a b :~: f a' b')
@@ -45,6 +45,7 @@ instance TestEquality PrimTy where
 
 instance TestEquality Ty where
   Pair a b `testEquality` (Pair a' b')  = liftEq2 <$> testEquality a a' <*> testEquality b b'
+  Func a b `testEquality` (Func a' b')  = liftEq2 <$> testEquality a a' <*> testEquality b b'
   (T ns a)    `testEquality` (T ns' a') = liftEq2 <$> sameNats ns ns' <*> testEquality a a'
 
   _ `testEquality`    _               = Nothing
@@ -64,3 +65,6 @@ instance (Prim a, KnownNats dims) => Typed (Tensor dims a) where
 
 instance (Typed a, Typed b) => Typed (a,b)  where
   ty = Pair ty ty
+
+instance (Typed a, Typed b) => Typed (a -> b)  where
+    ty = Func ty ty
