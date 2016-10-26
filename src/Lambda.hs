@@ -160,16 +160,18 @@ instance (Const :<: f, Plus :<: f) => Num (Term f Int) where
     fromInteger x = Term (iConst $ fromInteger x)
     (+) (Term a) (Term b) = Term $ a `iPlus` b
 
-let_ (Term e) f = Term $ iLet e (f . unTerm)
 
-e :: Term Sig Int
-e = Term $ iLet (iLam (\(x :: _) -> iLam (+ x) `iApp` 3) `iApp` 2) (\k -> (k + k))
-
-v :: Either String Int
-v = evalM e
-
-e' :: Term Sig (Int -> Int)
-e' = Term iErr --(iLam id)
-
-v' :: Either String (Int -> Either String Int)
-v' = evalM e'
+--
+--
+-- e :: Trm Sig Int
+-- e = iLet (iLam (\x -> iLam (+ x) `iApp` 3) `iApp` 2) (\k -> (k + k))
+--
+--
+-- v :: Either String Int
+-- v = evalM e
+--
+-- e' :: Term Sig (Int -> Int)
+-- e' = Term iErr --(iLam id)
+--
+-- v' :: Either String (Int -> Either String Int)
+-- v' = evalM e'

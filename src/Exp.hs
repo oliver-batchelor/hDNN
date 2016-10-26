@@ -12,11 +12,17 @@ import Data.Kind (Type)
 import Data.Proxy
 
 import Type.Family.List
-import Data.Promotion.Prelude.List
+import Data.Type.Index
+
+import Data.Promotion.Prelude.List hiding (Sum, Elem)
 import HDNN.Prelude
+
+import Data.Typeable
 
 import Prelude ((.))
 import Data.Singletons.TH
+--import Data.Type.Sum
+
 --import Data.Singletons.TypeLits
 
 import HDNN.Typed
@@ -41,38 +47,88 @@ data Op a where
 --   Zip :: (forall a. Floating a => a -> a -> a) -> Op (Tensor' ns ~> Tensor' ns ~> Tensor' ns)
 
 
-data Exp  a where
-    Op      ::  Op a -> Exp  a
-    (:$)    ::  (Typed a, Typed b) => Exp (a -> b) -> Exp a -> Exp b
-    Lam     :: (Exp  a -> Exp b) -> Exp  (a -> b)
+data Sum :: [Type] -> Type where
+  L :: x -> Sum (x : xs)
+  R :: Sum xs -> Sum (x : xs)
+
+
+inj :: (Elem xs x) => x -> Sum xs
+inj = inj' elemIndex
+
+
+inj' :: Index xs x -> x -> Sum xs
+inj' = \case
+  IZ   -> L
+  IS x -> R . inj' x
+
+class Proj x xs where
+  proj :: Proxy x -> Sum xs -> Maybe x
+
+instance Proj x (x:xs) where
+  proj _ (L x) = Just x
+  proj _ _     = Nothing
+
+instance Proj x ys => Proj x (y:ys) where
+  proj p (R ys) = proj p ys
+
+data FList f xs where
+  FNil :: FList f '[]
+  (:<) ::  f x -> FList f xs -> FList f (x : xs)
+
+newtype Rev b a = Rev (a -> b)
+
+elim :: FList (Rev a) xs -> Sum xs -> a
+elim (Rev f :< fs) (L x)  = f x
+elim (_ :< fs)     (R xs) = elim fs xs
+
+infixr 5 :<
+
+test, test1 :: Sum [Int, Double, Maybe String]
+test = inj (3 :: Int)
+test1 = inj (Just "fooobar")
+
+f = (Rev show :< Rev show :< Rev show :< FNil)
+res = (elim f test1, elim f test)
+
+-- elim (Fun (f :: x1 -> a) :< fs) o@(OneOf (x :: x2)) = case eqT of
+--   Just (Refl :: x1 :~: x2) -> f x
+--   Nothing -> elim fs o
+
+
+
+data Exp a where
+    Op      ::  Op e -> Exp a
+    App     ::  (Typed a, Typed b) => Exp (a -> b) -> Exp a -> Exp b
     Let     :: Exp a -> (Exp a -> Exp b) -> Exp b
 
 
 
 
 
+
+
 op1 :: (Typed a, Typed b) => Op (a -> b) -> Exp a -> Exp b
-op1 op a = Op op :$ a
+op1 op a = Op op `App` a
 --
 op2 :: (Typed a, Typed b, Typed c) => Op (a -> b -> c) -> Exp a -> Exp b -> Exp c
-op2 op a b = Op op :$ a :$ b
+op2 op a b = Op op `App` a `App` b
 
 expand :: (Prim a, KnownNats ns, KnownNat n, n ~ Product ns) => Exp (Vector n a) -> Exp (Tensor ns a)
 expand = op1 (Reshape natsList)
-
-input :: (Prim a, KnownNats ns, KnownNat n, n ~ Product ns) => Exp (Tensor ns a)
-input = expand (Op Input)
-
-
-linear :: forall m n. (KnownNat m, KnownNat n) => Exp (Matrix' n m) -> Exp (Vector' n) -> Exp (Vector' m)
-linear = op2 (Linear (snat @ m))
-
-linear' ::  forall m n hs. (KnownNat m, KnownNat n) => Exp (Vector' n) -> Exp (Vector' m)
-linear'  = linear input
-
-
-y :: forall m n. (KnownNat n, KnownNat m) => Exp  (Vector' n -> Vector' m)
-y = Lam $ linear' @m . linear' @m . linear' @20
+--
+-- input :: (Prim a, KnownNats ns, KnownNat n, n ~ Product ns) => Exp (Tensor ns a)
+-- input = expand (Op Input)
+--
+--
+-- linear :: forall m n. (KnownNat m, KnownNat n) => Exp (Matrix' n m) -> Exp (Vector' n) -> Exp (Vector' m)
+-- linear = op2 (Linear (snat @ m))
+--
+-- linear' ::  forall m n hs. (KnownNat m, KnownNat n) => Exp (Vector' n) -> Exp (Vector' m)
+-- linear'  = linear input
+--
+--
+-- y :: forall m n. (KnownNat n, KnownNat m) => Exp  (Vector' n -> Vector' m)
+-- y = Lam $ linear' @m . linear' @m . linear' @20
 
 
 -- type Builder a = State [Bind Ty N] a
@@ -105,11 +161,3 @@ y = Lam $ linear' @m . linear' @m . linear' @20
 
 -- (:$)    ::  Exp (a -> b) -> Exp a -> Exp b
 -- Lam     :: (Exp  a -> Exp b) -> Exp  (a -> b)
-
-instance ShowF Op where
-  showF (Linear (SNat m)) = unwords ["Linear ", show (natVal m)]
-  showF (Reshape (n :<# ns)) = unwords ["Reshape ", show (natVal n : natsVal ns)]
-
-instance ShowF v => ShowF (N v) where
-   showF (OpNode o)    = unwords ["Op", showF o]
-   showF (App a b)     = unwords ["App",showF a,showF b]
