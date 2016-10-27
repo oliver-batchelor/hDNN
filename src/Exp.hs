@@ -8,11 +8,13 @@ import Data.Maybe
 
 import GHC.TypeLits
 --import GHC.TypeLits.List
-import Data.Kind (Type)
+import Data.Kind (Type, Constraint)
 import Data.Proxy
 
 import Type.Family.List
 import Data.Type.Index
+
+import Type.Class.Witness
 
 import Data.Promotion.Prelude.List hiding (Sum, Elem)
 import HDNN.Prelude
@@ -75,20 +77,36 @@ data FList f xs where
   FNil :: FList f '[]
   (:<) ::  f x -> FList f xs -> FList f (x : xs)
 
-newtype Rev b a = Rev (a -> b)
 
-elim :: FList (Rev a) xs -> Sum xs -> a
-elim (Rev f :< fs) (L x)  = f x
-elim (_ :< fs)     (R xs) = elim fs xs
+data F c a = F (forall x. c x => x -> a)
+
+elim :: forall c xs a. (Every c xs) => (forall x. Wit (c x) -> x -> a) -> Sum xs -> a
+elim f (L x)  =  f Wit x
+elim f (R xs) = elim f xs
+
+
+
+
+instance (Every Show xs) => Show (Sum xs) where
+  show = elim showWit
 
 infixr 5 :<
 
-test, test1 :: Sum [Int, Double, Maybe String]
+data Foo = Foo deriving Show
+
+type Types = [Int, Double, Maybe String, Foo]
+
+mkFoo :: (Elem Types x) => x -> Sum Types
+mkFoo = inj
+
+test, test1 :: Sum Types
 test = inj (3 :: Int)
 test1 = inj (Just "fooobar")
 
-f = (Rev show :< Rev show :< Rev show :< FNil)
-res = (elim f test1, elim f test)
+showWit :: Wit (Show x) -> x -> String
+showWit Wit = show
+
+res = (elim showWit test1, elim showWit test)
 
 -- elim (Fun (f :: x1 -> a) :< fs) o@(OneOf (x :: x2)) = case eqT of
 --   Just (Refl :: x1 :~: x2) -> f x
