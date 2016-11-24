@@ -16,14 +16,14 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules: HDNN.Exp, HDNN.Tensor, HDNN.Type.Shape, HDNN.Typed, Lambda, Lambda2
+  exposed-modules: HDNN.Tensor, Exp, HDNN.Type.Shape,  Sum, SumF
   other-modules: HDNN.Prelude
   other-extensions: PolyKinds, TemplateHaskell
   default-extensions:  FlexibleContexts, FlexibleInstances, GADTs, DataKinds,
                        TypeInType, KindSignatures, InstanceSigs, TypeOperators,
                        ConstraintKinds, RankNTypes, ScopedTypeVariables, TypeFamilies,
                        UndecidableInstances, MultiParamTypeClasses, TypeApplications,
-                       NoImplicitPrelude, NoMonomorphismRestriction, PartialTypeSignatures, LambdaCase, TemplateHaskell
+                       NoImplicitPrelude, NoMonomorphismRestriction, PartialTypeSignatures, LambdaCase, TemplateHaskell, DeriveGeneric, DeriveFunctor
 
   build-depends:       base >=4.9 && <4.10,
                       containers,
@@ -34,8 +34,7 @@ library
                       ghc-typelits-natnormalise,
                       ghc-typelits-knownnat,
                       mtl >= 2.2,
-                      compdata-param,
-                      compdata
+                      deriving-compat
 
   hs-source-dirs:      src
   default-language:    Haskell2010

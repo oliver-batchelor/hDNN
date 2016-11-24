@@ -10,23 +10,23 @@ import  Data.Kind  as Export (Type)
 
 import Prelude as Export hiding (concat, id, (.), Real)
 
-data SNat (n :: Nat) where
-  SZero :: SNat 0
-  SNat  :: KnownNat n => Proxy n -> SNat n
-
-instance Show (SNat n) where
-  show (SNat p) = 'd' : show (natVal p)
-
-{-# INLINE snat #-}
--- | Create a singleton literal for a type-level natural number
-snat :: KnownNat n => SNat n
-snat = SNat Proxy
-
-{-# INLINE withSNat #-}
--- | Supply a function with a singleton natural 'n' according to the context
-withSNat :: KnownNat n => (SNat n -> a) -> a
-withSNat f = f (SNat Proxy)
-
-{-# INLINE snatToInteger #-}
-snatToInteger :: SNat n -> Integer
-snatToInteger (SNat p) = natVal p
+-- data SNat (n :: Nat) where
+--   SZero :: SNat 0
+--   SNat  :: KnownNat n => Proxy n -> SNat n
+--
+-- instance Show (SNat n) where
+--   show (SNat p) = 'd' : show (natVal p)
+--
+-- {-# INLINE snat #-}
+-- -- | Create a singleton literal for a type-level natural number
+-- snat :: KnownNat n => SNat n
+-- snat = SNat Proxy
+--
+-- {-# INLINE withSNat #-}
+-- -- | Supply a function with a singleton natural 'n' according to the context
+-- withSNat :: KnownNat n => (SNat n -> a) -> a
+-- withSNat f = f (SNat Proxy)
+--
+-- {-# INLINE snatToInteger #-}
+-- snatToInteger :: SNat n -> Integer
+-- snatToInteger (SNat p) = natVal p

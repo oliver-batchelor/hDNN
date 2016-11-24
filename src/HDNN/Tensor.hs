@@ -41,14 +41,14 @@ instance (Show a, Num a, KnownNats ds) => Num (Tensor ds a) where
 
 
 
-concat ::  SNat dim -> Tensor xs a -> Tensor ys a -> Tensor (Concats dim xs ys) a
-concat _ Tensor Tensor = Tensor
-
-concatMat ::  SNat dim -> Matrix m n a -> Matrix p q a -> Tensor (Concats dim [m, n] [p, q]) a
-concatMat = concat
-
-concatVec ::  Vector n a -> Vector m a -> Vector (n + m) a
-concatVec = concat (snat @ 0)
+-- concat ::  SNat dim -> Tensor xs a -> Tensor ys a -> Tensor (Concats dim xs ys) a
+-- concat _ Tensor Tensor = Tensor
+--
+-- concatMat ::  SNat dim -> Matrix m n a -> Matrix p q a -> Tensor (Concats dim [m, n] [p, q]) a
+-- concatMat = concat
+--
+-- concatVec ::  Vector n a -> Vector m a -> Vector (n + m) a
+-- concatVec = concat (snat @ 0)
 
 -- baz :: _
 -- baz m1 m2 = concat dim1 m1 m2

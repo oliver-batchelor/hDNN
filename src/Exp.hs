@@ -2,7 +2,7 @@
 
 
 
-module Exp where
+module AST where
 
 import Data.Maybe
 
@@ -23,129 +23,125 @@ import Data.Typeable
 
 import Prelude ((.))
 import Data.Singletons.TH
+import Data.Singletons.Prelude
 --import Data.Type.Sum
 
---import Data.Singletons.TypeLits
+import Data.Singletons.TypeLits
 
-import HDNN.Typed
-import HDNN.Tensor
-
-import HDNN.TGraph
+import SumF
 
 import Control.Monad.State
 
 
-type Tensor' ds = Tensor ds Float
-type Vector' n = Vector n Float
-type Matrix' n m = Matrix n m Float
+
+$(singletons [d|
+  data Sig a = Full a | (:->) a (Sig a)
+    deriving (Show, Ord, Eq)
+
+  data Prim = I | F | B deriving (Show, Eq)
+  data T n = Tensor [n] Prim deriving (Show, Eq)
+
+  |])
+
+data Args f sig where
+  NilA :: Args f (Full a)
+  (:*)  :: f (Full a) -> Args f sig -> Args f (a :-> sig)
+
+
+type family Result sig where
+  Result (Full a)    = a
+  Result (a :-> sig) = Result sig
+
+infixr 5 :->
+
+type Vector (n :: Nat) a = Tensor '[n] a
+type Matrix n m a = Tensor '[n, m] a
 
 --
 data Op a where
-   Linear :: SNat m -> Op (Matrix' n m  -> Vector' n  -> Vector' m)
+   Linear :: SNat m -> Op (Matrix n m F :-> Vector n F :-> Full (Vector m F))
 --   --Flatten :: KnownNats ns => Tensor ns a -> Vector (Product ns) a
-   Reshape :: (Product ns ~ Product ns') => NatList ns' -> Op (Tensor ns a -> Tensor ns' a)
-   Input   :: Typed a => Op a
+  --  Reshape :: (Product ns ~ Product ns') => NatList ns' -> Op (Tensor ns a -> Tensor ns' a)
+  --  Input   :: Op a
 --   Map :: (forall a. Floating a => a -> a) -> Op (Tensor' ns ~> Tensor' ns)
 --   Zip :: (forall a. Floating a => a -> a -> a) -> Op (Tensor' ns ~> Tensor' ns ~> Tensor' ns)
 
 
-data Sum :: [Type] -> Type where
-  L :: x -> Sum (x : xs)
-  R :: Sum xs -> Sum (x : xs)
+data AST :: (Sig t -> Type) -> Sig t -> Type where
+  Sym  :: dom sig -> AST dom sig
+  (:$) :: AST dom (a :-> sig) -> AST dom (Full a) -> AST dom sig
+  Let  :: AST dom (Full a) -> (AST dom (Full a) -> AST dom (Full b)) -> AST dom (Full b)
+
+infixl 1 :$
+infixr :*
+
+type ASTF dom a = AST dom (Full a)
 
 
-inj :: (Elem xs x) => x -> Sum xs
-inj = inj' elemIndex
+typedFold :: forall dom f b. (forall a. dom a -> Args f a -> f (Full (Result a))) ->
+           ASTF dom b -> f (Full b)
+typedFold f e = go e NilA
+  where
+    go :: forall a. AST dom a -> Args f a -> f (Full (Result a))
+    go (Sym s) args     = f s args
+    go (Let a f) =
+    go (s :$ arg)  args = go s (typedFold f arg :* args)
+
+everywhere :: (forall a. ASTF dom a -> ASTF dom a) ->
+              (forall a. ASTF dom a -> ASTF dom a)
+everywhere f = typedFold (\s -> f . appArgs (Sym s))
+    appArgs :: AST dom sig -> Args (AST dom) sig -> ASTF dom (Result sig)
+    appArgs a Nil = a
+    appArgs s (a :* as) = appArgs (s :$ a) as
 
 
-inj' :: Index xs x -> x -> Sum xs
-inj' = \case
-  IZ   -> L
-  IS x -> R . inj' x
+foo :: Sing (a :: T Nat) -> String
+foo (STensor xs t) = case xs of
+      (SNat :: (Sing n) ) `SCons` xs -> show $ natVal (Proxy @n)
 
-class Proj x xs where
-  proj :: Proxy x -> Sum xs -> Maybe x
-
-instance Proj x (x:xs) where
-  proj _ (L x) = Just x
-  proj _ _     = Nothing
-
-instance Proj x ys => Proj x (y:ys) where
-  proj p (R ys) = proj p ys
-
-data FList f xs where
-  FNil :: FList f '[]
-  (:<) ::  f x -> FList f xs -> FList f (x : xs)
-
-
-data F c a = F (forall x. c x => x -> a)
-
-elim :: forall c xs a. (Every c xs) => (forall x. Wit (c x) -> x -> a) -> Sum xs -> a
-elim f (L x)  =  f Wit x
-elim f (R xs) = elim f xs
-
+--foo :: SingI (Vector n a) => Proxy
 
 
 
-instance (Every Show xs) => Show (Sum xs) where
-  show = elim showWit
-
-infixr 5 :<
-
-data Foo = Foo deriving Show
-
-type Types = [Int, Double, Maybe String, Foo]
-
-mkFoo :: (Elem Types x) => x -> Sum Types
-mkFoo = inj
-
-test, test1 :: Sum Types
-test = inj (3 :: Int)
-test1 = inj (Just "fooobar")
-
-showWit :: Wit (Show x) -> x -> String
-showWit Wit = show
-
-res = (elim showWit test1, elim showWit test)
 
 -- elim (Fun (f :: x1 -> a) :< fs) o@(OneOf (x :: x2)) = case eqT of
 --   Just (Refl :: x1 :~: x2) -> f x
 --   Nothing -> elim fs o
 
-
-
-data Exp a where
-    Op      ::  Op e -> Exp a
-    App     ::  (Typed a, Typed b) => Exp (a -> b) -> Exp a -> Exp b
-    Let     :: Exp a -> (Exp a -> Exp b) -> Exp b
-
-
-
-
-
-
-
-op1 :: (Typed a, Typed b) => Op (a -> b) -> Exp a -> Exp b
-op1 op a = Op op `App` a
---
-op2 :: (Typed a, Typed b, Typed c) => Op (a -> b -> c) -> Exp a -> Exp b -> Exp c
-op2 op a b = Op op `App` a `App` b
-
-expand :: (Prim a, KnownNats ns, KnownNat n, n ~ Product ns) => Exp (Vector n a) -> Exp (Tensor ns a)
-expand = op1 (Reshape natsList)
---
--- input :: (Prim a, KnownNats ns, KnownNat n, n ~ Product ns) => Exp (Tensor ns a)
--- input = expand (Op Input)
 --
 --
--- linear :: forall m n. (KnownNat m, KnownNat n) => Exp (Matrix' n m) -> Exp (Vector' n) -> Exp (Vector' m)
+-- data AST a where
+--     Op      ::  Op e -> AST a
+--     App     ::  (Typed a, Typed b) => AST (a -> b) -> AST a -> AST b
+--     Let     :: AST a -> (AST a -> AST b) -> AST b
+--
+--
+--
+--
+--
+--
+--
+-- op1 :: (Typed a, Typed b) => Op (a -> b) -> AST a -> AST b
+-- op1 op a = Op op `App` a
+-- --
+-- op2 :: (Typed a, Typed b, Typed c) => Op (a -> b -> c) -> AST a -> AST b -> AST c
+-- op2 op a b = Op op `App` a `App` b
+--
+-- ASTand :: (Prim a, KnownNats ns, KnownNat n, n ~ Product ns) => AST (Vector n a) -> AST (Tensor ns a)
+-- ASTand = op1 (Reshape natsList)
+-- --
+-- input :: (Prim a, KnownNats ns, KnownNat n, n ~ Product ns) => AST (Tensor ns a)
+-- input = ASTand (Op Input)
+--
+--
+-- linear :: forall m n. (KnownNat m, KnownNat n) => AST (Matrix' n m) -> AST (Vector' n) -> AST (Vector' m)
 -- linear = op2 (Linear (snat @ m))
 --
--- linear' ::  forall m n hs. (KnownNat m, KnownNat n) => Exp (Vector' n) -> Exp (Vector' m)
+-- linear' ::  forall m n hs. (KnownNat m, KnownNat n) => AST (Vector' n) -> AST (Vector' m)
 -- linear'  = linear input
 --
 --
--- y :: forall m n. (KnownNat n, KnownNat m) => Exp  (Vector' n -> Vector' m)
+-- y :: forall m n. (KnownNat n, KnownNat m) => AST  (Vector' n -> Vector' m)
 -- y = Lam $ linear' @m . linear' @m . linear' @20
 
 
@@ -165,7 +161,7 @@ expand = op1 (Reshape natsList)
 --   modify (Bind v n :)
 --   return v
 --
--- toGraph :: Typed a => Exp a -> Builder (V Ty a)
+-- toGraph :: Typed a => AST a -> Builder (V Ty a)
 -- toGraph (Op op) = bind (OpNode op)
 -- toGraph (f :$ a) = case f of
 --   (Lam g) -> toGraph (g a)
@@ -177,5 +173,5 @@ expand = op1 (Reshape natsList)
 
 
 
--- (:$)    ::  Exp (a -> b) -> Exp a -> Exp b
--- Lam     :: (Exp  a -> Exp b) -> Exp  (a -> b)
+-- (:$)    ::  AST (a -> b) -> AST a -> AST b
+-- Lam     :: (AST  a -> AST b) -> AST  (a -> b)

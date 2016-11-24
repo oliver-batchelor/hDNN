@@ -8,11 +8,11 @@ import HDNN.Prelude
 
 import Type.Family.Nat as Export (N(..))
 
-dim0 = snat @ 0
-dim1 = snat @ 1
-dim3 = snat @ 3
-dim4 = snat @ 4
-dim5 = snat @ 5
+-- dim0 = snat @ 0
+-- dim1 = snat @ 1
+-- dim3 = snat @ 3
+-- dim4 = snat @ 4
+-- dim5 = snat @ 5
 
 
 type family Unary (d::Nat) :: N where
