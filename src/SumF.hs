@@ -64,29 +64,41 @@ instance (Every Functor fs) => Functor (SumF fs) where
 data Foo a = Foo a deriving (Generic1, Functor)
 deriveShow1 ''Foo
 
-
+data Params a = Params a deriving (Generic1, Functor)
+deriveShow1 ''Params
 
 
 type Types = [Maybe, Foo, Either String]
+
+
+
+type Types' = Params ': Types
 --
-mkFoo :: (Elem Types f) => f a -> SumF Types a
+mkFoo :: (Elem Types' f) => f a -> SumF Types' a
 mkFoo = inj
 --
-test :: SumF Types Int
+test :: SumF Types' Int
 test = mkFoo (Foo 3)
 
-test1 :: SumF Types String
+test1 :: SumF Types' String
 test1 = mkFoo (Just "fooobar")
 
---
--- replace ::  (gs ~ Delete f fs, Without fs f gs, Elem gs g) => (f a -> g a) -> SumF fs a -> SumF gs a
--- replace f = either (inj . f) id . remove
---
--- remove ::  Without fs f gs => SumF fs a -> Either (f a) (SumF gs a)
--- remove  = remove' without
---
--- remove' ::  Remove fs f gs -> SumF fs a -> Either (f a) (SumF gs a)
--- remove'  RZ (L x) = Left x
--- remove'  RZ (R xs) = Right xs
--- remove'  (RS n) (L x) = Right (L x)
--- remove'  (RS n) (R xs) = right R (remove' n xs)
+param1 :: SumF Types' String
+param1 = mkFoo (Params "fooobar")
+
+
+
+gone = replace (\(Params s) -> Just s) param1
+
+
+replace ::  (Without fs f gs, Elem gs g) => (f a -> g a) -> SumF fs a -> SumF gs a
+replace f = either (inj . f) id . remove
+
+remove ::  Without fs f gs => SumF fs a -> Either (f a) (SumF gs a)
+remove  = remove' without
+
+remove' ::  Remove fs f gs -> SumF fs a -> Either (f a) (SumF gs a)
+remove'  RZ (L x) = Left x
+remove'  RZ (R xs) = Right xs
+remove'  (RS n) (L x) = Right (L x)
+remove'  (RS n) (R xs) = right R (remove' n xs)

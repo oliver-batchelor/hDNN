@@ -2,7 +2,7 @@
 
 
 
-module AST where
+module Exp where
 
 import Data.Maybe
 
@@ -29,75 +29,56 @@ import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
 
 import SumF
+import HDNN.Tensor
 
 import Control.Monad.State
 
 
 
-$(singletons [d|
-  data Sig a = Full a | (:->) a (Sig a)
-    deriving (Show, Ord, Eq)
-
-  data Prim = I | F | B deriving (Show, Eq)
-  data T n = Tensor [n] Prim deriving (Show, Eq)
-
-  |])
-
-data Args f sig where
-  NilA :: Args f (Full a)
-  (:*)  :: f (Full a) -> Args f sig -> Args f (a :-> sig)
-
-
-type family Result sig where
-  Result (Full a)    = a
-  Result (a :-> sig) = Result sig
-
-infixr 5 :->
-
 type Vector (n :: Nat) a = Tensor '[n] a
 type Matrix n m a = Tensor '[n, m] a
 
 --
-data Op a where
-   Linear :: SNat m -> Op (Matrix n m F :-> Vector n F :-> Full (Vector m F))
+-- data Op a where
+--    Linear :: SNat m -> Op (Matrix n m F :-> Vector n F :-> Full (Vector m F))
 --   --Flatten :: KnownNats ns => Tensor ns a -> Vector (Product ns) a
   --  Reshape :: (Product ns ~ Product ns') => NatList ns' -> Op (Tensor ns a -> Tensor ns' a)
   --  Input   :: Op a
 --   Map :: (forall a. Floating a => a -> a) -> Op (Tensor' ns ~> Tensor' ns)
 --   Zip :: (forall a. Floating a => a -> a -> a) -> Op (Tensor' ns ~> Tensor' ns ~> Tensor' ns)
 
-
-data AST :: (Sig t -> Type) -> Sig t -> Type where
-  Sym  :: dom sig -> AST dom sig
-  (:$) :: AST dom (a :-> sig) -> AST dom (Full a) -> AST dom sig
-  Let  :: AST dom (Full a) -> (AST dom (Full a) -> AST dom (Full b)) -> AST dom (Full b)
-
-infixl 1 :$
-infixr :*
-
-type ASTF dom a = AST dom (Full a)
-
-
-typedFold :: forall dom f b. (forall a. dom a -> Args f a -> f (Full (Result a))) ->
-           ASTF dom b -> f (Full b)
-typedFold f e = go e NilA
-  where
-    go :: forall a. AST dom a -> Args f a -> f (Full (Result a))
-    go (Sym s) args     = f s args
-    go (Let a f) =
-    go (s :$ arg)  args = go s (typedFold f arg :* args)
-
-everywhere :: (forall a. ASTF dom a -> ASTF dom a) ->
-              (forall a. ASTF dom a -> ASTF dom a)
-everywhere f = typedFold (\s -> f . appArgs (Sym s))
-    appArgs :: AST dom sig -> Args (AST dom) sig -> ASTF dom (Result sig)
-    appArgs a Nil = a
-    appArgs s (a :* as) = appArgs (s :$ a) as
-
-
-foo :: Sing (a :: T Nat) -> String
-foo (STensor xs t) = case xs of
-      (SNat :: (Sing n) ) `SCons` xs -> show $ natVal (Proxy @n)
+--
+-- data AST :: (Sig t -> Type) -> Sig t -> Type where
+--   Sym  :: dom sig -> AST dom sig
+--   (:$) :: AST dom (a :-> sig) -> AST dom (Full a) -> AST dom sig
+--   Let  :: AST dom (Full a) -> (AST dom (Full a) -> AST dom (Full b)) -> AST dom (Full b)
+--
+-- infixl 1 :$
+-- infixr :*
+--
+-- type ASTF dom a = AST dom (Full a)
+--
+--
+-- typedFold :: forall dom f b. (forall a. dom a -> Args f a -> f (Full (Result a))) ->
+--            ASTF dom b -> f (Full b)
+-- typedFold f e = go e NilA
+--   where
+--     go :: forall a. AST dom a -> Args f a -> f (Full (Result a))
+--     go (Sym s)     args = f s args
+--     go (Let a g)   args =
+--     go (s :$ arg)  args = go s (typedFold f arg :* args)
+--
+-- everywhere :: (forall a. ASTF dom a -> ASTF dom a) ->
+--               (forall a. ASTF dom a -> ASTF dom a)
+-- everywhere f = typedFold (\s -> f . appArgs (Sym s))
+--     appArgs :: AST dom sig -> Args (AST dom) sig -> ASTF dom (Result sig)
+--     appArgs a Nil = a
+--     appArgs s (a :* as) = appArgs (s :$ a) as
+--
+--
+-- foo :: Sing (a :: T Nat) -> String
+-- foo (STensor xs t) = case xs of
+--       (SNat :: (Sing n) ) `SCons` xs -> show $ natVal (Proxy @n)
 
 --foo :: SingI (Vector n a) => Proxy
 
